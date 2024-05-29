@@ -1,10 +1,10 @@
-const basePath = process.cwd();
-const { NETWORK } = require(`${basePath}/constants/network.js`);
-const fs = require("fs");
-const sha1 = require(`${basePath}/node_modules/sha1`);
-const { createCanvas, loadImage } = require(`${basePath}/node_modules/canvas`);
-const buildDir = `${basePath}/build`;
-const layersDir = `${basePath}/layers`;
+const basePath = process.cwd(); // 获取当前工作目录
+const { NETWORK } = require(`${basePath}/constants/network.js`); // 引入网络配置
+const fs = require("fs"); // 文件系统模块
+const sha1 = require(`${basePath}/node_modules/sha1`); // sha1 加密模块
+const { createCanvas, loadImage } = require(`${basePath}/node_modules/canvas`); // Canvas 模块，用于图像生成
+const buildDir = `${basePath}/build`; // 构建目录
+const layersDir = `${basePath}/layers`; // 图层目录
 const {
   format,
   baseUri,
@@ -21,32 +21,38 @@ const {
   network,
   solanaMetadata,
   gif,
-} = require(`${basePath}/src/config.js`);
+} = require(`${basePath}/src/config.js`); // 引入配置文件
+
+// 创建画布和上下文
 const canvas = createCanvas(format.width, format.height);
 const ctx = canvas.getContext("2d");
-ctx.imageSmoothingEnabled = format.smoothing;
+ctx.imageSmoothingEnabled = format.smoothing; // 设置图像平滑
+
+// 初始化变量
 var metadataList = [];
 var attributesList = [];
 var dnaList = new Set();
-const DNA_DELIMITER = "-";
-const HashlipsGiffer = require(`${basePath}/modules/HashlipsGiffer.js`);
+const DNA_DELIMITER = "-"; // DNA 分隔符
+const HashlipsGiffer = require(`${basePath}/modules/HashlipsGiffer.js`); // GIF 模块
 
-let hashlipsGiffer = null;
+let hashlipsGiffer = null; // 初始化 GIF 变量
 
+// 构建设置函数，创建必要的目录
 const buildSetup = () => {
   if (fs.existsSync(buildDir)) {
-    fs.rmdirSync(buildDir, { recursive: true });
+    fs.rmdirSync(buildDir, { recursive: true }); // 如果构建目录存在，递归删除
   }
-  fs.mkdirSync(buildDir);
-  fs.mkdirSync(`${buildDir}/json`);
-  fs.mkdirSync(`${buildDir}/images`);
+  fs.mkdirSync(buildDir); // 创建构建目录
+  fs.mkdirSync(`${buildDir}/json`); // 创建 JSON 目录
+  fs.mkdirSync(`${buildDir}/images`); // 创建图像目录
   if (gif.export) {
-    fs.mkdirSync(`${buildDir}/gifs`);
+    fs.mkdirSync(`${buildDir}/gifs`); // 如果需要导出 GIF，创建 GIF 目录
   }
 };
 
+// 获取稀有度权重
 const getRarityWeight = (_str) => {
-  let nameWithoutExtension = _str.slice(0, -4);
+  let nameWithoutExtension = _str.slice(0, -4); // 去掉文件扩展名
   var nameWithoutWeight = Number(
     nameWithoutExtension.split(rarityDelimiter).pop()
   );
@@ -56,18 +62,21 @@ const getRarityWeight = (_str) => {
   return nameWithoutWeight;
 };
 
+// 清理 DNA 字符串
 const cleanDna = (_str) => {
   const withoutOptions = removeQueryStrings(_str);
   var dna = Number(withoutOptions.split(":").shift());
   return dna;
 };
 
+// 清理名称
 const cleanName = (_str) => {
   let nameWithoutExtension = _str.slice(0, -4);
   var nameWithoutWeight = nameWithoutExtension.split(rarityDelimiter).shift();
   return nameWithoutWeight;
 };
 
+// 获取图层元素
 const getElements = (path) => {
   return fs
     .readdirSync(path)
@@ -110,6 +119,7 @@ const layersSetup = (layersOrder) => {
   return layers;
 };
 
+// 保存图像
 const saveImage = (_editionCount) => {
   fs.writeFileSync(
     `${buildDir}/images/${_editionCount}.png`,
@@ -117,17 +127,20 @@ const saveImage = (_editionCount) => {
   );
 };
 
+// 生成颜色
 const genColor = () => {
   let hue = Math.floor(Math.random() * 360);
   let pastel = `hsl(${hue}, 100%, ${background.brightness})`;
   return pastel;
 };
 
+// 绘制背景
 const drawBackground = () => {
   ctx.fillStyle = background.static ? background.default : genColor();
   ctx.fillRect(0, 0, format.width, format.height);
 };
 
+// 添加元数据
 const addMetadata = (_dna, _edition) => {
   let dateTime = Date.now();
   let tempMetadata = {
@@ -143,14 +156,12 @@ const addMetadata = (_dna, _edition) => {
   };
   if (network == NETWORK.sol) {
     tempMetadata = {
-      //Added metadata for solana
+      // 添加 Solana 元数据
       name: tempMetadata.name,
       symbol: solanaMetadata.symbol,
       description: tempMetadata.description,
-      //Added metadata for solana
       seller_fee_basis_points: solanaMetadata.seller_fee_basis_points,
       image: `${_edition}.png`,
-      //Added metadata for solana
       external_url: solanaMetadata.external_url,
       edition: _edition,
       ...extraMetadata,
@@ -171,6 +182,7 @@ const addMetadata = (_dna, _edition) => {
   attributesList = [];
 };
 
+// 添加属性
 const addAttributes = (_element) => {
   let selectedElement = _element.layer.selectedElement;
   attributesList.push({
@@ -179,6 +191,7 @@ const addAttributes = (_element) => {
   });
 };
 
+// 加载图层图像
 const loadLayerImg = async (_layer) => {
   try {
     return new Promise(async (resolve) => {
@@ -190,6 +203,7 @@ const loadLayerImg = async (_layer) => {
   }
 };
 
+// 添加文本
 const addText = (_sig, x, y, size) => {
   ctx.fillStyle = text.color;
   ctx.font = `${text.weight} ${size}pt ${text.family}`;
@@ -198,6 +212,7 @@ const addText = (_sig, x, y, size) => {
   ctx.fillText(_sig, x, y);
 };
 
+// 绘制元素
 const drawElement = (_renderObject, _index, _layersLen) => {
   ctx.globalAlpha = _renderObject.layer.opacity;
   ctx.globalCompositeOperation = _renderObject.layer.blend;
@@ -219,6 +234,7 @@ const drawElement = (_renderObject, _index, _layersLen) => {
   addAttributes(_renderObject);
 };
 
+// 构建 DNA 到图层的映射
 const constructLayerToDna = (_dna = "", _layers = []) => {
   let mappedDnaToLayers = _layers.map((layer, index) => {
     let selectedElement = layer.elements.find(
@@ -234,14 +250,7 @@ const constructLayerToDna = (_dna = "", _layers = []) => {
   return mappedDnaToLayers;
 };
 
-/**
- * In some cases a DNA string may contain optional query parameters for options
- * such as bypassing the DNA isUnique check, this function filters out those
- * items without modifying the stored DNA.
- *
- * @param {String} _dna New DNA string
- * @returns new DNA string with any items that should be filtered, removed.
- */
+// 过滤 DNA 选项
 const filterDNAOptions = (_dna) => {
   const dnaItems = _dna.split(DNA_DELIMITER);
   const filteredDNA = dnaItems.filter((element) => {
@@ -261,24 +270,19 @@ const filterDNAOptions = (_dna) => {
   return filteredDNA.join(DNA_DELIMITER);
 };
 
-/**
- * Cleaning function for DNA strings. When DNA strings include an option, it
- * is added to the filename with a ?setting=value query string. It needs to be
- * removed to properly access the file name before Drawing.
- *
- * @param {String} _dna The entire newDNA string
- * @returns Cleaned DNA string without querystring parameters.
- */
+// 移除 DNA 字符串中的查询参数
 const removeQueryStrings = (_dna) => {
   const query = /(\?.*$)/;
   return _dna.replace(query, "");
 };
 
+// 检查 DNA 是否唯一
 const isDnaUnique = (_DnaList = new Set(), _dna = "") => {
   const _filteredDNA = filterDNAOptions(_dna);
   return !_DnaList.has(_filteredDNA);
 };
 
+// 创建 DNA
 const createDna = (_layers) => {
   let randNum = [];
   _layers.forEach((layer) => {
@@ -286,10 +290,10 @@ const createDna = (_layers) => {
     layer.elements.forEach((element) => {
       totalWeight += element.weight;
     });
-    // number between 0 - totalWeight
+    // 随机数在 0 到 totalWeight 之间
     let random = Math.floor(Math.random() * totalWeight);
     for (var i = 0; i < layer.elements.length; i++) {
-      // subtract the current weight from the random weight until we reach a sub zero value.
+      // 从随机数中减去当前权重，直到达到负值
       random -= layer.elements[i].weight;
       if (random < 0) {
         return randNum.push(
@@ -307,6 +311,7 @@ const writeMetaData = (_data) => {
   fs.writeFileSync(`${buildDir}/json/_metadata.json`, _data);
 };
 
+// 保存单个文件的元数据
 const saveMetaDataSingleFile = (_editionCount) => {
   let metadata = metadataList.find((meta) => meta.edition == _editionCount);
   debugLogs
@@ -320,6 +325,7 @@ const saveMetaDataSingleFile = (_editionCount) => {
   );
 };
 
+// 洗牌数组
 function shuffle(array) {
   let currentIndex = array.length,
     randomIndex;
@@ -429,4 +435,5 @@ const startCreating = async () => {
   writeMetaData(JSON.stringify(metadataList, null, 2));
 };
 
+// 导出模块
 module.exports = { startCreating, buildSetup, getElements };
