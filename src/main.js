@@ -282,28 +282,164 @@ const isDnaUnique = (_DnaList = new Set(), _dna = "") => {
   return !_DnaList.has(_filteredDNA);
 };
 
+// 判断是否命中依赖规则
+const matchDependencyRule = (
+  selectedElements,
+  currentLayerName,
+  dependencyRules
+) => {
+  const usedLayerArray = Object.keys(selectedElements);
+
+  for (const rule of dependencyRules) {
+    if (
+      usedLayerArray.includes(rule.layerA) &&
+      selectedElements[rule.layerA] === rule.valueA &&
+      rule.layerB === currentLayerName
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+// 判断是否命中互斥规则
+const matchMutuallyExclusiveRule = (
+  selectedElements,
+  currentLayerName,
+  mutuallyExclusiveRules
+) => {
+  const usedLayerArray = Object.keys(selectedElements);
+
+  for (const rule of mutuallyExclusiveRules) {
+    if (
+      usedLayerArray.includes(rule.layerA) &&
+      selectedElements[rule.layerA] === rule.valueA &&
+      rule.layerB === currentLayerName
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+// 保留依赖规则的元素
+const filterDependencyElements = (
+  selectedElements,
+  currentLayerName,
+  dependencyRules,
+  allElements
+) => {
+  const elementsMap = new Map();
+  allElements.forEach((element) => {
+    elementsMap.set(element.name, element);
+  });
+  const _elements = new Set();
+  const usedLayerArray = Object.keys(selectedElements);
+
+  for (const rule of dependencyRules) {
+    if (
+      usedLayerArray.includes(rule.layerA) &&
+      selectedElements[rule.layerA] === rule.valueA &&
+      rule.layerB === currentLayerName
+    ) {
+      const element = elementsMap.get(rule.valueB);
+      if (element) {
+        _elements.add(element);
+      }
+    }
+  }
+
+  return Array.from(_elements);
+};
+
+// 过滤互斥元素
+const filterMutuallyExclusiveElements = (
+  selectedElements,
+  currentLayerName,
+  mutuallyExclusiveRules,
+  allElements
+) => {
+  const elementsMap = new Map();
+  allElements.forEach((element) => {
+    elementsMap.set(element.name, element);
+  });
+  const _elements = new Set(allElements); // 从所有元素开始
+  const usedLayerArray = Object.keys(selectedElements);
+
+  for (const rule of mutuallyExclusiveRules) {
+    if (
+      usedLayerArray.includes(rule.layerA) &&
+      selectedElements[rule.layerA] === rule.valueA &&
+      rule.layerB === currentLayerName
+    ) {
+      const element = elementsMap.get(rule.valueB);
+      if (element) {
+        _elements.delete(element);
+      }
+    }
+  }
+
+  return Array.from(_elements);
+};
+
 // 创建 DNA
-const createDna = (_layers) => {
+const createDna = (_layers, mutuallyExclusiveRules, dependencyRules) => {
   let randNum = [];
+  let selectedElements = {};
+
+  // 遍历图层
   _layers.forEach((layer) => {
-    var totalWeight = 0;
-    layer.elements.forEach((element) => {
+    let _elements = layer.elements.slice();
+
+    if (matchDependencyRule(selectedElements, layer.name, dependencyRules)) {
+      _elements = filterDependencyElements(
+        selectedElements,
+        layer.name,
+        dependencyRules,
+        layer.elements
+      );
+    }
+
+    if (
+      matchMutuallyExclusiveRule(
+        selectedElements,
+        layer.name,
+        mutuallyExclusiveRules
+      )
+    ) {
+      _elements = filterMutuallyExclusiveElements(
+        selectedElements,
+        layer.name,
+        mutuallyExclusiveRules,
+        _elements
+      );
+    }
+
+    // 选取内容
+    let totalWeight = 0;
+    _elements.forEach((element) => {
       totalWeight += element.weight;
     });
+
     // 随机数在 0 到 totalWeight 之间
     let random = Math.floor(Math.random() * totalWeight);
-    for (var i = 0; i < layer.elements.length; i++) {
+    for (let i = 0; i < _elements.length; i++) {
       // 从随机数中减去当前权重，直到达到负值
-      random -= layer.elements[i].weight;
+      random -= _elements[i].weight;
       if (random < 0) {
-        return randNum.push(
-          `${layer.elements[i].id}:${layer.elements[i].filename}${
+        selectedElements[layer.name] = _elements[i].name;
+        randNum.push(
+          `${_elements[i].id}:${_elements[i].filename}${
             layer.bypassDNA ? "?bypassDNA=true" : ""
           }`
         );
+        break; // 找到匹配元素后跳出循环
       }
     }
   });
+
   return randNum.join(DNA_DELIMITER);
 };
 
@@ -329,9 +465,13 @@ const saveMetaDataSingleFile = (_editionCount) => {
 function shuffle(array) {
   let currentIndex = array.length,
     randomIndex;
+
+  // 当还有剩余元素要被打乱时
   while (currentIndex != 0) {
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex--;
+
+    // 交换当前元素与随机选择的元素
     [array[currentIndex], array[randomIndex]] = [
       array[randomIndex],
       array[currentIndex],
@@ -340,10 +480,17 @@ function shuffle(array) {
   return array;
 }
 
+const test = () => {
+  console.log(layerConfigurations[0]);
+};
+
+// 开始生成
 const startCreating = async () => {
   let layerConfigIndex = 0;
   let editionCount = 1;
   let failedCount = 0;
+
+  // 待生成NFT的数组
   let abstractedIndexes = [];
   for (
     let i = network == NETWORK.sol ? 0 : 1;
@@ -358,6 +505,8 @@ const startCreating = async () => {
   debugLogs
     ? console.log("Editions left to create: ", abstractedIndexes)
     : null;
+
+  // while循环生成
   while (layerConfigIndex < layerConfigurations.length) {
     const layers = layersSetup(
       layerConfigurations[layerConfigIndex].layersOrder
@@ -365,7 +514,11 @@ const startCreating = async () => {
     while (
       editionCount <= layerConfigurations[layerConfigIndex].growEditionSizeTo
     ) {
-      let newDna = createDna(layers);
+      let newDna = createDna(
+        layers,
+        layerConfigurations[layerConfigIndex].mutuallyExclusiveRules,
+        layerConfigurations[layerConfigIndex].dependencyRules
+      );
       if (isDnaUnique(dnaList, newDna)) {
         let results = constructLayerToDna(newDna, layers);
         let loadedElements = [];
@@ -436,4 +589,4 @@ const startCreating = async () => {
 };
 
 // 导出模块
-module.exports = { startCreating, buildSetup, getElements };
+module.exports = { startCreating, buildSetup, getElements, test };

@@ -24,7 +24,7 @@ const solanaMetadata = {
 // If you have selected Solana then the collection starts from 0 automatically
 const layerConfigurations = [
   {
-    growEditionSizeTo: 5,
+    growEditionSizeTo: 150,
     layersOrder: [
       { name: "Background" },
       { name: "Eyeball" },
@@ -34,12 +34,25 @@ const layerConfigurations = [
       { name: "Bottom lid" },
       { name: "Top lid" },
     ],
+    // 互斥规则 example：{ layerA: 'Eyeball', valueA: 'Red Eyeball', layerB: 'Iris', valueB: 'Blue Iris' }
+    mutuallyExclusiveRules: [
+      {
+        layerA: "Bottom lid",
+        valueA: "Low",
+        layerB: "Eye color",
+        valueB: "yellow",
+      },
+    ],
+    // 依赖规则 example：{ layerA: 'Shine', valueA: 'Golden Shine', layerB: 'Top lid', valueB: 'Golden Top Lid' }
+    dependencyRules: [
+      { layerA: "Goo", valueA: "Green", layerB: "Iris", valueB: "Small" },
+    ],
   },
 ];
 
 const shuffleLayerConfigurations = false;
 
-const debugLogs = false;
+const debugLogs = true;
 
 const format = {
   width: 512,
